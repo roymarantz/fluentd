@@ -428,6 +428,7 @@ module Fluent
         supervisor_sigterm_handler
       end
 
+      @in_hup_handler = 0       # to prevent concurrent SIGHUP handlers
       trap :HUP do
         $log.debug "fluentd supervisor process get SIGHUP"
         $log.info "restarting"
@@ -477,6 +478,9 @@ module Fluent
     end
 
     def supervisor_sighup_handler
+      @in_hup_handler += 1
+      return if @in_hup_handler > 1 # allow only 1 SIGHUP handler at a time
+      #
       # Creating new thread due to mutex can't lock
       # in main thread during trap context
       Thread.new {
@@ -486,6 +490,7 @@ module Fluent
           Process.kill(:TERM, pid)
           # don't resuce Erro::ESRSH here (invalid status)
         end
+        @in_hup_handler -= 1    # allow another SIGHUP to be handled
       }.run
     end
 
